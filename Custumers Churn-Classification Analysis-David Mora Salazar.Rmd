@@ -1,0 +1,492 @@
+---
+title: "Custumers Churn-Classification Analysis"
+author: "David Mora Salazar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Carga de paquetes
+```{r, message=FALSE, warning=FALSE}
+
+
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("corrplot")
+install.packages("tidyverse")
+install.packages("glmnet")
+install.packages("caret")
+install.packages("ggpubr")
+install.packages("pROC")
+install.packages("randomForest")
+install.packages("readxl")
+install.packages("factoextra")
+install.packages("cluster")
+install.packages("lubridate")
+install.packages("formattable")
+install.packages("reshape2")
+
+library("dplyr")
+library("ggplot2")
+library("corrplot")
+library("tidyverse")
+library("glmnet")
+library("caret")
+library("ggpubr")
+library("pROC")
+library("randomForest")
+library("readxl")
+library("factoextra")
+library("cluster")
+library("lubridate")
+library("formattable")
+library("reshape2")
+library("readr")
+```
+
+• **Etapa 1. Comprensión del problema:***
+ 
+
+## 1.1 Objetivos 
+Este investigación pretende resolver qué variables están contribuyendo en la fuga de los clientes, cuáles características de los clientes hacen más propensos que los clientes hagan fuga, y finalmente, desea resolver qué acciones se pueden tomar por parte de las empresas de telecomunicaciones para evitar la fuga.
+ 
+
+## 1.2 Valoración de la situación
+
+Con el desarrollo vertiginoso de la industria de las telecomunicaciones, los provedores de servicios cada vez están más inclinados hacia la expansión de su base de clientes leales. Para mantenerse a flote dentro del clima competitivo, retener consumidores existentes se ha vuelto el principal reto: el costo de atrae a un nuevo cliente es mucho mayor que retener a uno contento, es por esto, que es necesario que las empresas de telecomunicaciones utilicen avanzadas técnicas de análisis de datos para entender el comportamiento de sus clientes y predecir el nivel de certeza de que un cliente deje o no la compañía.
+
+Esa base de datos contiene información de los consumidores para una compañía. Varios atributos sobre los servicios usados son recopilados en la base.
+
+
+## 1.3 Determinar los objetivos del Datamining
+##Diccionario de datos:
+
+Es importante determinar cuáles son las variables que contiene la base de datos y su significado:
+Churn
+1 if customer cancelled service, 0 if not
+
+AccountWeeks
+number of weeks customer has had active account
+
+ContractRenewal
+1 if customer recently renewed contract, 0 if not
+
+DataPlan
+1 if customer has data plan, 0 if not
+
+DataUsage
+gigabytes of monthly data usage
+
+CustServCalls
+number of calls into customer service
+
+DayMins
+average daytime minutes per month
+
+DayCalls
+average number of daytime calls
+
+MonthlyCharge
+average monthly bill
+
+OverageFee
+largest overage fee in last 12 months
+
+RoamMins
+average number of roaming minutes
+
+---
+## 1.4 Elaboración del plan de proyecto
+
+
+• **Etapa 1. Comprensión del problema:** 
+ 
+
+• **Etapa 2. Comprensión de los datos:** 
+ 
+
+• **Etapa 3. Preparación de los datos:** 
+
+
+• **Etapa 4. Modelamiento:** 
+
+ 
+• **Etapa 5. Evaluación:** 
+ 
+
+• **Etapa 6. Despliegue:** 
+---
+
+ 
+
+• **Etapa 2. Comprensión de los datos:** 
+
+
+## 2.1 Obtención de las fuentes de datos
+
+ 
+#### 2.1.1 Carga de archivos csv
+
+```{r}
+telecom_churn <- read.csv("~/ECONOMÍA UCR/ECONOMÍA UNIVERSIDAD DE COSTA RICA/Econometría Avanzada/Proyecto Final/Datasets/Custumers Churns/telecom_churn.csv",  sep = ',',dec = '.')
+```
+
+## 2.2 Mecanismos de transmisión de las variables
+
+### 2.2.1 Resumen de las variables continuas y frequencia de las variables categóricas
+```{r}
+summary(telecom_churn[c('AccountWeeks','DataUsage','CustServCalls','DayMins','DayCalls','MonthlyCharge','OverageFee','RoamMins')])
+```
+
+```{r}
+install.packages('epiDisplay')
+library(epiDisplay)
+tab1(telecom_churn$Churn, sort.group = "decreasing", cum.percent = TRUE)
+tab1(telecom_churn$ContractRenewal, sort.group = "decreasing", cum.percent = TRUE)
+tab1(telecom_churn$DataPlan, sort.group = "decreasing", cum.percent = TRUE)
+```
+### 2.2.2 Intuiciones de la transmisión de las variables (¿Por qué se eligieron las variables?). 
+La pregunta que se desea responder es en qué medida, las variables características de una persona usuaria aumentan la probabilidad de clasificar a esa persona como una desertora de los servicios de comunicación que les brinda una empresa.
+
+Primeramente, es importante notar en la variable CHURN, la frecuencia de personas que abandonaron la suscripción respecto a quienes no. Esta información muestra un desbalance importante entre ocurrencias. Esta situación contribuye a un problema de clasificación sobre la proporción de la variable respuesta en datos_train y datos_test cuando se realiza la validación cruzada.
+
+Con respecto a la variable ContractRenewal se espera que quienes hayan renovado el contrato telefónico aporten en la probabilidad de quedarse en la compañía actual, pues habiendo no podido renovar, deciden hacerlo, pues poseen un grado de preferencia por la empresa. Para aquellos que no renuevan, lo subsiguiente es que salgan del contrato.
+
+Finalmente, con la variable DataPlan sobre si la persona posee un plan de datos, se espera que, algún tipo de plan de datos sea congruente con la salida de la persona de la suscripción. A nivel de la forma en que trabajan estos modelos de negocio, se espera que aquellas personas que poseen plan de datos, sean aquellas que cambien de suscripción en el tanto ellas esperaban algún nivel mínimo de calidad de los datos y no se vieron satisfechan, por lo que serán más propensas a abandonar.
+
+AccountWeeks muestra la cantidad de semanas en que la persona ha poseído una cuenta activa, una posible transmisión de variables mostraría que valores muy bajos representa una mayor ocurrencia de abandono de la suscripción pues implica un descontento directo.
+
+DataUsage muestran los gigabytes mensuales de uso de datos, esta variable continua posee una gran cantidad de valores en 0 a 0.54, más de la mitad, es por esto, que se propone convertir esta variable en dicotómica de 0 a 0.54, y de 0.55 en adelante de manera que se pueda analizar un patrón de si gigabytes bajos de datos implica que la persona no le da uso a la subscripción y es por esa razón que la abandona.
+
+CustServCalls muestra la cantidad de llamadas de servicio al cliente que ha hecho la persona usuaria. Se espera que mayores llamadas, aumenten la probabilidad de clasificarse como una persona que abandona la subscripción. La cantidad de llamadas del los primeros 3 cuantiles es de 2, pero el máximo de llamadas es de 9, por lo tanto, se espera que valores extremos por arriba de 2, representen mayor propensión del abandono.
+
+DayMins y DayCalls muestras la cantidad de minutos y de minutos de llamada que usa la persona en la subscripción, se espera que un aumento de la cantidad de minutos, clasifique a la persona como alguien que se mantiene en la subscripción. Minutos bajos pueden indicar el poco uso de la subscripción, por lo que promueve el desinterés por la subscripción.
+
+MonthlyCharge muestra el costo promedio mensual de la subscripción. Esta variable sufre un problema de endogeneidad, el costo de la subscripción puede estar correlacionada con la cantidad de minutos de datos, llamadas y de roaming, sin embargo, la base de datos no lo especifica. Para nuestros fines, la vamos a tratar como una variable independiente, de manera que se espera que un aumento en el costo pueda significar un aumento de la clasificación a abandono.
+
+OverageFee representa el mayor cargo por excedente en los últimos 12 meses. En algunas ocasiones, cuando cae de sorpresa un cargo por excedente, las personas tienden a asustarse y a tomar control de la situación antes que sus finanzas le limiten, es por eso que optan por cancelar inmediatamente la subscripcción en estos escenarios. Se espera que, a raíz de cargos por excedentes altos, estos cancelen la subscripción.
+
+Finalmente se tiene RoamMin, este mide el número de minutos en estado de roaming que usa el usuario.
+
+• **Etapa 3. Preparación de los datos:** 
+#Valores extremos de los datos
+##Valores nulos y ceros
+Ninguna variable posee valores nulos y la única transformación consistente de datos es la de la variable DataUsage, de manera que provea información más valiosa de ella, tal como se explicó sobre la hipótesis de transmisión de variables de la etapa 2.2.2.
+##Cantidad de valores atípicos
+```{r}
+boxplot(telecom_churn$AccountWeeks,
+  ylab = "AccountWeeks",
+  main = "Number of weeks with active accounts"
+)
+mtext(paste("Outliers: ",boxplot.stats(telecom_churn$AccountWeeks)$out ))
+boxplot.stats(telecom_churn$AccountWeeks)$out
+
+```
+```{r}
+boxplot(telecom_churn$CustServCalls,
+  ylab = "CustServCalls",
+  main = "Number of calls in custumer service"
+)
+mtext(paste("Outliers: ",boxplot.stats(telecom_churn$CustServCalls)$out ))
+boxplot.stats(telecom_churn$CustServCalls)$out
+```
+```{r}
+boxplot(telecom_churn$DayCalls,
+  ylab = "DayCalls",
+  main = "Average number of daytime calls"
+)
+mtext(paste("Outliers: ",boxplot.stats(telecom_churn$DayCalls)$out ))
+boxplot.stats(telecom_churn$DayCalls)$out
+```
+```{r}
+boxplot(telecom_churn$MonthlyCharge,
+  ylab = "MonthlyCharge",
+  main = "Monthly charge of the subscription"
+)
+mtext(paste("Outliers: ",boxplot.stats(telecom_churn$MonthlyCharge)$out ))
+boxplot.stats(telecom_churn$MonthlyCharge)$out
+```
+```{r}
+boxplot(telecom_churn$OverageFee,
+  ylab = "OverageFee",
+  main = "OverageFee charge of the subscription"
+)
+mtext(paste("Outliers: ",boxplot.stats(telecom_churn$OverageFee)$out ))
+boxplot.stats(telecom_churn$OverageFee)$out
+```
+```{r}
+boxplot(telecom_churn$RoamMins,
+  ylab = "RoamMins",
+  main = "RoamMins of the subscription"
+)
+mtext(paste("Outliers: ",boxplot.stats(telecom_churn$RoamMins)$out ))
+boxplot.stats(telecom_churn$RoamMins)$out
+``` 
+A partir de la revisión de datos atípicos mediante boxplots utilizando un criterio de rango intercuantílico.
+
+Los resultados muestran que de 3333 observaciones para cada variable, en su mayoría, los valores atípicos no sobrepasan a las 20 observaciones a excepción de RoamMins y CustServCalls. A este último, al representar la cantidad de llamadas a servicio al cliente, es mejor no hacer ninguna transformación en el tanto muchas llamadas pueden ser parte de la queja sostenida del cliente. A RoamMins se le hará caso omiso pues igualmente siguen siendo pocos valores y es más preciso realizar una buena clasificación que ajustar mejor el nivel de la media.
+
+#Transformación de los datos
+```{r}
+telecom_churn$DataUsageDic<-
+  with(telecom_churn,
+       ifelse(DataUsage >= 0 & DataUsage <= 0.54, 0, 1))
+tab1(telecom_churn$DataUsageDic, sort.group = "decreasing", cum.percent = TRUE)
+```
+• **Etapa 4. Modelamiento:** 
+
+#Modelo de K Vecinos Más Cercanos (KNN)
+```{r}
+#Creación de variables dummy
+telecom_churn_2 <- telecom_churn %>% mutate(
+ContractRenewal = as.factor(ContractRenewal),
+DataPlan = as.factor(DataPlan),
+DataUsageDic = as.factor(DataUsageDic))
+dummy <- dummyVars("~.",data=telecom_churn_2)
+telecom_churn_2 <- data.frame(predict(dummy, newdata = telecom_churn_2)) 
+
+
+telecom_churn <- telecom_churn_2
+rm(telecom_churn_2)
+#Normalización
+
+library(tidyverse)
+
+telecom_churn_norm <-telecom_churn %>% mutate_if(negate(is.factor), normalize)
+
+telecom_churn_norm <-as.data.frame(telecom_churn_norm) %>%  mutate(Churn=case_when(Churn>0~"SI", TRUE~"NO"))
+```
+
+```{r}
+#Definicion de datos de prueba y entrenamiento (Ojo:Esta no es la validación cruzada)
+
+training.sample<-telecom_churn_norm$Churn %>% caret::createDataPartition(p=0.75, list=FALSE)
+
+datos_train<-telecom_churn_norm[training.sample, ]
+datos_test<-telecom_churn_norm[-training.sample, ] #el - significa el resto de números que no está en training.sample.
+
+#Verificar proporción de datos en cada muestra sea similar(Partition lo hace por defecto)
+prop.table(table(datos_train$Churn))
+prop.table(table(datos_test$Churn))
+```
+
+```{r}
+# HIPERPARÁMETROS, NÚMERO DE REPETICIONES Y SEMILLAS PARA CADA REPETICIÓN
+#======================================================================
+#K particiones: K folds. Lo usual es usar 5 o 10.
+
+particiones <- 10
+repeticiones <- 5
+# Hiperparámetros. A diferencia del modelo logístico, en este caso sí utilizamos hiperparámetros 
+hiperparametros <- data.frame(k = c(5,10,25, 50, 100))
+#Cada repetición de partición se hace para 4 diferentes k
+set.seed(123)
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+#Explorar seeds: Vemos que hay una diferencia con las semillas que usamos en el modelo logístico: en este caso cada una de las 51 líneas se compone a su vez de 8  semillas, correspondientes a los diferentes parámetros (diferentes k)
+ seeds[[i]] <- sample.int(1000, nrow(hiperparametros)) 
+}
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(1000, 1)
+```
+
+```{r}
+# DEFINICIÓN DEL ENTRENAMIENTO
+#===============================================================================
+#Aqui estamos usando validación cruzada repetida y no solo validación cruzada
+
+control_train <- trainControl(
+#Podemos usar solo cv, leave one out, etc  
+method = "repeatedcv", 
+number = particiones,
+repeats = repeticiones, 
+seeds = seeds,
+#Final, all, o none
+returnResamp = "final", 
+#Si queremos el log 
+verboseIter = FALSE,
+allowParallel = TRUE, 
+#Lo necesitamos si vamos a usar ROC como métrica
+classProbs = TRUE)
+```
+
+```{r}
+# AJUSTE DEL MODELO
+# ==================================================================
+set.seed(342)
+modelo_knn <- train(Churn ~ ., data = datos_train,
+method = "knn",
+tuneGrid = hiperparametros,
+#Metric: métricas usadas para evaluar el modelo
+metric = "Accuracy",
+#Accuracy es la métrica por default para modelos de clasificación y RMSE para modelos de regresión
+
+trControl = control_train)
+
+```
+
+La cantidad de vecinos K óptima es 5.
+```{r}
+modelo_knn
+```
+#Resultados del mejor modelo elegido
+```{r}
+resamples <- modelo_knn$resample %>% mutate(Rep=substr(Resample,8,11)) 
+
+#Cada resample da como resultado el promedio de la métrica por repetición(basado en K=5 iteraciones)
+
+modelo_knn$finalModel
+
+
+#Analicemos el accuracy
+summary(modelo_knn$resample$Accuracy)
+```
+
+```{r}
+p1 <- ggplot(data = modelo_knn$resample, aes(x = Accuracy)) +
+ geom_density(alpha = 0.5, fill = "gray50") +
+ geom_vline(xintercept = mean(modelo_knn$resample$Accuracy),
+ linetype = "dashed") +
+ theme_bw() 
+p2 <- ggplot(data = modelo_knn$resample, aes(x = 1, y = Accuracy)) +
+ geom_boxplot(outlier.shape = NA, alpha = 0.5, fill = "gray50") +
+ geom_jitter(width = 0.05) +
+ labs(x = "") +
+ theme_bw() +
+ theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+ 
+final_plot <- ggarrange(p1, p2)
+final_plot <- annotate_figure(
+ final_plot,
+ top = text_grob("Accuracy obtenido en la validación", size = 15))
+final_plot
+
+ggplot(modelo_knn, highlight = TRUE) +
+ scale_x_continuous(breaks = hiperparametros$k) +
+  labs(title = "Evolución del accuracy del modelo KNN", x = "K") +
+ theme_bw()
+```
+
+#Predicciones
+
+```{r}
+#Evaluacion de resultados
+predicciones=predict(modelo_knn, newdata = datos_test, type = "raw")
+predicciones %>% head(10)
+```
+
+#Matrices de confusión
+```{r}
+#cutoff point= 50%
+caret::confusionMatrix(predicciones, as.factor(datos_test$Churn),positive="SI")
+#Kappa serà especialmente ùtil cuando tengamos problemas de imbalances
+#Pos Pred Value= Asertividad positiva o precisión:VP/FP+VP
+#Neg Pred Value= Asertividad negativa: VN/FN+VN
+#Prevalence: Casos positivos/total
+#Detection rate: VP/Total
+#Detection prevalence: predichos positivos/Total
+#Balanced Acuracy: (sensibilidad+especificidad)/2
+
+# Cuando los datos no están balanceados, es más probable que asignemos una clasificación equivocada a la clase menos frecuente, comparada con la clase más frecuente. 
+
+#Fórmula del accuracy: 
+#(VP+VN)/(VP+VN+FP+FN)
+
+#Asumiendo que la clase con menor frecuencia es la negativa, con datos desbalanceados, si VN es muy pequeño respecto al total de negativos reales, esto va a afectar poco el accuracy si logramos predecir correctamente una buena parte de los positivos (VP). El numerador no se verá afectado por la desproporción entre la detección de positivos y negativos, y el accuracy podría ser alto. Esto es especialmente importante si nos interesa mucho obtener una buena predicción de los negativos. 
+
+#En modelos desbalanceados, el kappa evita que creamos que un modelo es bueno cuando realmente solo supera por poco lo esperado por azar
+
+# Kappa = (Accuracy – Accuracy Esperado (si hubiera sido clasificado al azar)) / (1 – Accuracy Esperado (si hubiera sido clasificado al azar)) 
+
+#Es decir: valor de accuracy normalizado respecto del porcentaje de acierto esperado por azar.
+```
+Tal como menciona la teoría respecto a los desbalances de la clasificación, el Kappa muestra la calidad real del modelo pues normaliza respecto a la calidad de predicción de los positivos. El modelo es muy bueno en Specificity : 0.98315, Pos Pred Value : 0.83099, Neg Pred Value : 0.91984. Esto indica que el modelo es muy bueno clasificando a las personas que no abandonan.
+
+
+#Modelo de Regresión Logística
+En este apartado se pretende realizar un análisis profundo de correlación y clasificación de datos para reconocer la calidad de predicción.
+```{r}
+#Creación de variables dummy
+telecom_churn_2 <- telecom_churn %>% mutate(
+ContractRenewal = as.factor(ContractRenewal),
+DataPlan = as.factor(DataPlan),
+DataUsageDic = as.factor(DataUsageDic))
+dummy <- dummyVars("~.",data=telecom_churn_2)
+telecom_churn_2 <- data.frame(predict(dummy, newdata = telecom_churn_2)) 
+
+
+telecom_churn <- telecom_churn_2
+rm(telecom_churn_2)
+#Normalización
+
+library(tidyverse)
+
+telecom_churn_norm <-telecom_churn %>% mutate_if(negate(is.factor), normalize)
+
+telecom_churn_norm <-as.data.frame(telecom_churn_norm) %>%  mutate(Churn=case_when(Churn>0~"SI", TRUE~"NO"))
+set.seed(1000)
+training.sample<-telecom_churn_norm$Churn %>% caret::createDataPartition(p=0.75, list=FALSE)
+datos_train<-telecom_churn_norm[training.sample, ]
+datos_test<-telecom_churn_norm[-training.sample, ]
+prop.table(table(datos_train$Churn))
+prop.table(table(datos_test$Churn))
+
+```
+La proporción de variables se divide en un 85.5%.
+```{r}
+set.seed(1000)
+particiones <- 10
+repeticiones <- 5
+hiperparametros <- data.frame(parameter = "none")
+set.seed(1000)
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+for (i in 1:(particiones * repeticiones)) {
+ seeds[[i]] <- sample.int(1000, nrow(hiperparametros))
+}
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(1000, 1)
+#Podemos usar solo cv, leave one out, etc
+control_train <- trainControl(method = "repeatedcv", number = particiones,repeats =repeticiones,seeds = seeds,
+#Final, all, o none
+returnResamp = "final", 
+#Si queremos el log 
+verboseIter = FALSE,
+allowParallel = TRUE, 
+#Lo necesitamos si vamos a usar ROC como métrica
+classProbs = TRUE)
+
+# AJUSTE DEL MODELO
+# ==================================================================
+set.seed(1000)
+modelo_logistic <- train(Churn ~ ., data = datos_train,
+method = "glm",
+
+#Metric: métricas usadas para evaluar el modelo
+metric = "Accuracy",
+#Accuracy es la métrica por default para modelos de clasificación y RMSE para modelos de regresión
+
+trControl = control_train, family = "binomial")
+```
+La métrica a utilizar para este modelo de clasificación es de Accuracy.
+```{r}
+modelo_logistic 
+```
+El accuracy tiene un buen nivel, sin embargo, el Kappa es bajo, esto debido al desbalance existente en la variable de clasificación.
+```{r}
+summary(modelo_logistic$finalModel)
+```
+Los coeficientes de un modelo Logit no se pueden interpretar, pero la dirección sí: note que los coeficientes significantes poseen una relación positiva con el abandono de la subscripción. 
+Conforme la muestra en promedio nunca ha renovado el contrato, aumenta la probabilidad de renunciar a la subscripcción.
+Conforme aumentan las llamadas de servicio al cliente, se aumenta la probabilidad de renunciar a la subscripción.
+Si aumentan los minutos de Roaming, por alguna razón, se renuncia a la subscripción, esto puede estar relacionado a que el tipo de subscripción no es el adecuado para la persona.
+```{r}
+#Calidad de la predicción
+#Evaluacion de resultados
+#Lo podemos cambiar entre raw y prob
+predicciones =predict(modelo_logistic, newdata = datos_test, type = "raw")
+
+predicciones_prob=predict(modelo_logistic, newdata = datos_test, type = "prob")
+predicciones_prob %>% head(10)
+```
+```{r}
+#Matriz de confusión
+caret::confusionMatrix(predicciones, as.factor(datos_test$Churn),positive="SI")
+```
+De lo anterior se puede notar el gran desbalance (también notable en Kappa) entre los valores de renuncia de la subscripción respecto a la estancia en la subscripción. Esto repercute en la facilidad del modelo por predecir las observaciones que sí renuncian a la subscripción.

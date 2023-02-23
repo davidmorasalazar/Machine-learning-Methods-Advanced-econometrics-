@@ -1,0 +1,439 @@
+---
+title: "Examen I"
+author: "Ana Laura Camacho"
+output: html_document
+---
+
+## Instrucciones
+
+Fecha l?mite de entrega: 28-09-2022
+Valor:35%
+59 puntos (No todas las preguntas suman puntos)
+
+Asegurese de abrir este script con encoding UTF-8 antes de hacer cualquier modificaci?n. (Archivo:Reabrir con Encoding:UTF-8(System Default)).Sugerencia: usar el outline a la derecha para desplazarse.
+
+No genere chunks con c?digo que puedan afectar la base de datos (ejemplo: eliminar variables si no se ha pedido, estandarizar, etc).
+
+Escriba sus respuestas(que no sean c?digo) fuera de los chunks. 
+
+
+
+## Instalaci?n de Paquetes
+
+Estos son los paquetes que se utilizar?n para la ejecuci?n del c?digo. 
+
+Recomendaci?n: Recuerde que los paquetes no deben instalarse cada vez que inicia una sesi?n de R. Si ya tiene instalados algunos de estos (deber?a tenerlos si ha cargado todos los paquetes de las clases), corra solo la secci?n de lectura de paquetes. Si hay alguno que no se encuentra instalado, instale exclusivamente ese.
+
+```{r}
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("psych")
+install.packages("corrplot")
+install.packages("tidyverse")
+install.packages("WVPlots")
+install.packages("Metrics")
+install.packages("MetricsWeighted")
+install.packages("vtreat")
+install.packages("splines")
+install.packages("glmnet")
+```
+
+
+## Lectura de paquetes
+```{r}
+library("dplyr")
+library("ggplot2")
+library("psych")
+library("corrplot")
+library("tidyverse")
+library("broom")
+library("WVPlots")
+library("Metrics")
+library("MetricsWeighted")
+library("vtreat")
+library("splines")
+library("glmnet")
+
+```
+
+
+##Lectura de datos
+
+Recuerde que debe descomprimir el archivo casas_data_set.rar para obtener casas_data_set.csv.
+
+Cambie la l?nea entre comillas con la ubicaci?n del archivo casas_data_set.csv en su computadora.
+
+El archivo diccioario.xls contiene los significados de las variables del dataset.Cada l?nea representa una casa y sus caracter?sticas.
+
+```{r setup, include=FALSE}
+casas <- read_csv("C:/Users/HP ProBook/OneDrive/OneDrive - Universidad de Costa Rica/Documentos/ECONOMÍA UCR/ECONOMÍA UNIVERSIDAD DE COSTA RICA/Econometría Avanzada/Parcial 1/casas_data_set.csv")
+```
+
+
+# 1) Con una o dos l?neas revise la composici?n genera del dataset dentro del siguiente chunk. (1)
+```{r}
+head(casas)
+summary(casas)
+```
+
+#2) En ocasiones, no debemos utilizar m?todos de selecci?n para desechar variables, es evidente que hay variables que no aportar?an nada a un modelo desde el punto de vista te?rico y pr?ctico.
+
+Si nuestro inter?s est? en predecir el precio de venta, qu? variable deber?amos desechar? (1)
+
+
+Respuesta: Id
+
+
+Elimine la variable que no vamos a utilizar con el comando select de dplyr dentro del siguiente chunk
+
+Ejemplo:
+basededatos<- basededatos %>% select(-variable_eliminada)
+
+```{r}
+casas<- casas %>% select(-Id)
+```
+
+
+
+#3) Corra el siguiente chunk que modifica algunas variables de la matriz x para una regresi?n Lasso
+
+```{r}
+casas.2 <- casas %>% mutate(
+  X2ndFlrSF= as.factor(case_when(X2ndFlrSF==0~0, TRUE~ 1)), #muta 2nd floor a variable dummy(1 si tiene segundo piso, 0 si no)
+  PoolArea= as.factor(case_when(PoolArea==0~0, TRUE~ 1)), #muta PoolArea a variable dummy(1 si tiene piscina, 0 si no)
+  MoSold=as.factor(MoSold), #Cambia el mes a factor de manera que al generar la matriz se genere una dummy por cada mes
+  KitchenAbvGr=as.factor(KitchenAbvGr), #Cambia el numero de cocinas a factor de manera que al generar la matriz se genere una dummy por cada n?mero
+  BedroomAbvGr= as.factor(BedroomAbvGr) #Cambia el numero de dormitorios a factor de manera que al generar la matriz se genere una dummy por cada n?mero
+  #Por qu? no se hace lo mismo con la variable TotalroomAbvGr? utilizando la funci?n table pueden ver que tendr?a m?s niveles de los manejables. 
+  )
+```
+
+
+# 4) Corra una regresi?n Lasso, para el dataset casas.2. 
+IMPORTANTE:nombre  "lasso.mod2" al modelo y guardelo en objetos como en el ejemplo visto en clase.  
+
+-Recuerde definir la matriz de x y y primero. Adem?s, recuerde que en el ejemplo en clase la columna predicha era la 1, en este caso es la 21.  
+
+-despliegue los coeficientes
+
+(3)
+
+```{r}
+
+x=model.matrix(SalePrice~.,data=casas.2)[,-1]
+
+y=casas.2$SalePrice
+
+#Elegir lambda con cv
+set.seed(100)
+train=sample(1:nrow(x), nrow(x)/2)
+test=(-train)
+y.test=y[test]
+lasso.mod2=cv.glmnet(x,y,alpha=1)
+plot(lasso.mod2)
+mejor_lambda =lasso.mod2$lambda.min
+mejor_lambda
+coef(lasso.mod2)
+
+```
+
+
+#5)Corra un chunk casi igual al anterior, pero ahora modificandolo para obtener una regresi?n ridge y guardelo en un objeto llamado ridge.mod. Al igual que en el caso anterior, despliegue los coeficientes y genere el lambda con validaci?n cruzada (3)
+
+```{r}
+x=model.matrix(SalePrice~.,data=casas.2)[,-1]
+
+y=casas.2$SalePrice
+#Elegir lambda con cv
+set.seed(100)
+train=sample(1:nrow(x), nrow(x)/2)
+test=(-train)
+y.test=y[test]
+ridge.mod=cv.glmnet(x,y,alpha=0)
+plot(ridge.mod)
+mejor_lambda =ridge.mod$lambda.min
+mejor_lambda
+coef(ridge.mod)
+
+```
+
+
+#6) En no m?s de 3 l?neas, por qu? el modelo ridge no logra encoger los coeficientes a 0? (3)
+
+Respuesta: 
+Ridge penaliza los betas más altos, pero no intenta eliminarlos, pues la restricción de suma de betas impuesta se comporta como una función circular de manera que acepte más combinaciones de betas altos.  
+
+#7)Cu?l es el lambda elegido por validaci?n cruzada en el modelo ridge?(lambdamin) (1)
+
+Respuesta:
+12047.55
+
+#8)Qu? ocurrir?a con los resultados del modelo ridge si el lambda se cambiara a un valor m?s peque?o? (1)
+
+Respuesta: 
+Si el lambda se cambiara a un valor más pequeño, los coeficientes del modelo nuevo tendrían un valor más más alto, pues ahora se penaliza menos los valores de los coeficientes, de manera que se acercan más a los valores calculados en un MCO.
+
+
+#9) Corra una regresi?n lineal m?ltiple con todas las variables de casas.2 y muestre la tabla summary que contiene los p values para cada variabe. Llame al modelo modelo_lineal_1 (2)
+
+```{r}
+x=model.matrix(SalePrice~.,data=casas.2)[,-1]
+
+y=casas.2$SalePrice
+
+modelo_lineal_1<-lm(formula=y~x, data = casas.2)
+
+summary(modelo_lineal_1)
+```
+
+#10)Mencione 2 variables son significativas al menos a un 0.05% en modelo_linea_1 y que fueron desechadas en el modelo Lasso (1)
+
+Respuesta:
+BedroomAbvGr5.
+PoolArea.
+
+#11) Vuelva a correr el un modelo lineal (ahora llamelo modelo_lineal_2) ?nicamente con las variables cuyos coeficientes no son 0 en el modelo mod.lasso2 y muestre los resultados con summary (2)
+
+```{r}
+modelo_lineal_2<-lm(formula=SalePrice~ OverallQual+YearBuilt+YearRemodAdd+TotalBsmtSF+X1stFlrSF+GrLivArea+BsmtFullBath+Fireplaces+GarageCars+GarageArea, data = casas.2)
+
+summary(modelo_lineal_2)
+```
+
+#12) Compare el modelo lineal 1 y el modelo lineal 2: cu?l R cuadrado es m?s alto y porqu?? (2)
+
+
+Respuesta:
+Note que el modelo 1 poseía el R cuadrado más alto, esto es porque el modelo Lasso permite mayores niveles de sesgo para evitar niveles altos de varianza, lo que directamente implica un aumento en la suma de residuos al cuadrado, tal aumento de SSR implica una reducción de R cuadrado, pues al aumentar los residuos al cuadrado ahora se puede explicar menos la proporción de la varianza en la variable de respuesta de la regresión que puede ser explicado por las variables predictoras. Eso es lo que se muestra en la comparación.
+
+#13) corra el siguiente chunk y a?ada a este un modelo_lineal_3 igual al 2 y muestre los resultados con summary.Diferencia: Para este modelo utilice la base de datos casas3 que se genera en el chunk  en donde GarageCars es categ?rica (2)
+
+```{r}
+casas3 <- casas.2 %>% mutate(GarageCars=as.factor(GarageCars))
+
+```
+
+```{r}
+modelo_lineal_3<-lm(formula=SalePrice~ OverallQual+YearBuilt+YearRemodAdd+TotalBsmtSF+X1stFlrSF+GrLivArea+BsmtFullBath+Fireplaces+GarageCars+GarageArea, data = casas3)
+
+summary(modelo_lineal_3)
+```
+#14)Qu? nivel de GarageCars es estad?sticamente significativo?Explique la interpretaci?n del coeficiente de este nivel. (1) 
+
+Respuesta: GarageCars3 es estadísticamente significativo. Se interpreta como: un aumento de la capacidad de autos por garaje de tres en comparación a la capacidad de un auto por garaje, manteniendo el resto constante, implica un aumento en promedio de 5.384 unidades en el precio de venta.
+
+
+#15) Corra el siguiente chunk en donde se genera una regresion lineal llamada modelo_lineal_3VC, (es igual que en modelo_lineal_3, pero esta vez con validaci?n cruzada)
+
+
+```{r}
+set.seed(100)
+Kparticiones <- kWayCrossValidation(nrow(casas3),10,NULL,NULL)
+casas3$pred_mod_lineal3_CV <-0
+
+for (i in 1:10){
+Particion <- Kparticiones[[i]]
+modelo_lineal_3VC <- lm(SalePrice~OverallQual+
+YearBuilt+YearRemodAdd+TotalBsmtSF+X1stFlrSF+GrLivArea+GarageCars+GarageArea, data=casas3[Particion$train, ])
+
+casas3$pred_mod_lineal3_CV[Particion$app] <- predict(modelo_lineal_3VC, newdata=casas3[Particion$app,])
+  
+}
+rmse(casas3$pred_mod_lineal3_CV, casas3$SalePrice)
+r_squared(casas3$pred_mod_lineal3_CV, casas3$SalePrice)
+summary(modelo_lineal_3VC)
+```
+
+#16) Con la funci?n predict, a?ada una columna a la base casas3 con los resultados del modelo_lineal_3.Llame a la columna pred_mod_lineal3_sinCV. Calcule rmse y el R2 de la forma que se hizo en el chunk anterior, ahora para los resultados del modelo_lineal_3.  (Recuerde que no tiene que volver a correr la regresi?n, solo guardar los resultados en la base) (3)
+
+```{r}
+casas3$pred_mod_lineal3_sinCV<-predict(modelo_lineal_3)
+
+head(casas3)
+
+rmse(casas3$pred_mod_lineal3_sinCV, casas3$SalePrice)
+r_squared(casas3$pred_mod_lineal3_sinCV, casas3$SalePrice)
+```
+
+#17)Cu?l de las dos medidas (R cuadrado o rmse) es mejor para comparar el modelo_lineal_3VC y el modelo_lineal_3 y por qu??Se puede interpretar igual el R2 en ambos casos?  (2)
+
+Respuesta: el R cuadrado se puede interpretar en ambos casos porte tanto con vc como sin ella, el R cuadrado se obtiene mediante los RMSE y el cálculo de lo residuos medios se hacen sobre el método de prueba, por ejemplo, si se usa vc, los RMSE totales se calculan como el promedio de todos los RMSE de cada partición de prueba, de manera que al final se realice un promedio de todos las partes de los datos que se usaron para predecir que tan bien se ajusta el modeo ante los nuevos datos, que al igual que una regresión (que usa todos los datos), permita esa comparación.  
+
+
+#18) Cu?l rmse es m?s bajo y por qu?? (1)
+
+Respuesta:  el rmse más bajo es del modelo_lineal_3, sin validación cruzada. esto sucede porque los modelos sin validación cruzada utilizan todas las observaciones de los datos para realizar la estimación, de manera que ajusta a todos los datos en sí mismos, mientras que los modelos de validación cruzada tienen la característica que valida para datos nuevos (prueba) qué tan preciso predicen los datos que usó el modelo (entrenamiento), de esta manera, son más propensos a tener mayor error pues vc sufre de menor sobreajuste en el tanto recibe nuevos datos (que el modelo no conoce) para estimarlos, que un modelo sin la vc.
+
+#19)Explique en no m?s de 4 l?neas de qu? manera la validaci?n cruzada mejora el ajuste del modelo. (3)
+
+Respuesta:
+Validación cruzada castiga por el nivel de flexibilidad para que los modelos no sobreajusten a los datos. Permite encontrar coeficientes que sin haber sido estimados con datos de prueba, se ajusten mejor a datos nuevos, de manera que mejora la capacidad de generalización para cada conjunto de particiones.
+
+#20) Corra el siguiente chunk para graficar la relaci?n entre el precio de venta y las siguientes variables 
+
+```{r}
+ggplot(casas.2, aes(x=TotalBsmtSF, y=SalePrice))+geom_point()
+ggplot(casas.2, aes(x=X1stFlrSF, y=SalePrice))+geom_point()
+ggplot(casas.2, aes(x=GrLivArea, y=SalePrice))+geom_point()
+ggplot(casas.2, aes(x=GarageArea, y=SalePrice))+geom_point()
+
+```
+
+#21)Genere un chunk igual al de la pregunta 17, con las siguientes diferencias: (3)
+
+-El modelo en este caso se llamar? modelo_poly3VC, contendr? las mismas variables, pero las que est?n graficadas en el punto 22 se incluiran en forma de polinomio de grado 3
+
+-la variable a?adida en casas3 se llamar? pred_poly3VC
+
+
+*Recuerde que no es necesario que corra las siguientes lineas m?s de una vez. La separaci?n de l?neas entre entrenamiento y prueba solo se necesita hacer una vez. 
+-------------------------------------------------------------------
+#set.seed(100)
+#Kparticiones <- kWayCrossValidation(nrow(casas3),10,NULL,NULL)
+-------------------------------------------------------------------
+
+
+```{r}
+casas3$pred_poly3VC <-0
+
+for (i in 1:10){
+Particion <- Kparticiones[[i]]
+modelo_poly3VC <- lm(SalePrice~OverallQual+
+YearBuilt+YearRemodAdd+poly(TotalBsmtSF,3)+poly(X1stFlrSF,3)+poly(GrLivArea,3)+GarageCars+poly(GarageArea,3), data=casas3[Particion$train, ])
+
+casas3$pred_poly3VC[Particion$app] <- predict(modelo_poly3VC, newdata=casas3[Particion$app,])
+  
+}
+rmse(casas3$pred_poly3VC, casas3$SalePrice)
+r_squared(casas3$pred_poly3VC, casas3$SalePrice)
+
+
+```
+
+
+#22)Utilice el comando summary para mostrar los resultados del modelo_poly3VC calculado en el chunk anterior
+
+
+```{r}
+summary(modelo_poly3VC)
+```
+
+#23) De acuerdo con los resultados, qu? variable parece haber sido mejor dejar de forma lineal? (1)
+
+Respuesta: GrLivArea     
+
+#24)Compare los resultados obtenidos en la pregunta 24 con los resultados de: (3)
+
+```{r}
+summary(modelo_lineal_3VC)
+```
+
+Observe especialmente los grados de libertad y el error est?ndar residual. 
+
+
+-Cu?l de los dos modelos tienen mayor variabilidad? Por qu??(Qu? diferencia al modelo para que as? sea) (1)
+
+el modelo "modelo_poly3VC" posee mayor variabilidad pues al permitir niveles de flexibilidad más altos, los coeficientes para cada set de entrenamiento se ajustarán mejor entre ellos y se diferenciarán más para cada set de entrenamiento, de manera que esa diferencia, los hace más variables.
+
+-Cu?l de los dos modelos tiene mayor sesgo?Por qu??(Qu? diferencia al modelo para que as? sea) (1)
+
+el modelo "modelo_lineal_3VC" posee mayor sesgo pues no permite altos niveles de sobre ajuste en el tanto se asume linealidad de las variables, de manera que las estimaciones solo tengan una dirección creciente y constante, a diferencia de modelos no lineales.
+
+-Si una mayor cantidad de grados de libertad nos permite acoplar m?s f?cilmente la forma de nuestro modelo al de la distribuci?n real de los datos, esperar?a que los gl de una regresi?n lineal sean m?s o menos que los de una regresi?n polinomial de grado p>1 para las mismas variables? (1)
+
+Se espera que los gl de una regresión lineal sean mayores a los de la regresión polinomial.
+
+#25)Explique brevemente qu? es el overfitting (2)
+
+Respuesta: es el resultado de la máxima especificación de los datos usados para el modelo, a nivel más teórico, sucede cuando tenemos un error cuadrático medio de muestra de
+entrenamiento muy pequeño pero un error cuadrático medio de prueba muy alto.
+
+
+#26)Con cu?l de los dos spans(valor s) en una regresi?n local hay mayor riesgo de que tengamos un problema de overfitting-Sobre ajuste de los datos y por qu?? (2)
+
+-s:0.001
+-s:0.5
+
+Respuesta: con el span de 0.001 existe mayor riesgo de overfitting, pues estas poseen un nivel de observaciones por las que ajusta el modelo bastante bajas, por lo que asigna pesos en magnitudes más altas a esas pocas observaciones en comparación a los pesos que asignarían a más observaciones, de esta forma, al ser los pesos más altos, el modelo se ve incentivado a minimizar más fuertemente los Residuos al cuadrado, lo cual ajusta fuertemente los coeficientes, más cercana será la función de regresión a los datos, y les hace perder generalidad.
+
+#27)Justifique brevemente por qu? los splines c?bicos son los m?s utilizados (2)
+
+Respuesta: es uno de los más comunes
+debido a su facilidad por acoplar mejor los límites de cada nudo, es decir, sobre los límites de cada nudo no puede detectar la discontinuidad a la vista humana, suaviza los cambios.
+
+#28)Corra el siguiente chunk
+
+```{r}
+GrLivingArealims=range(casas3$GrLivArea)
+GrLivingArea.grid=seq(from=GrLivingArealims[1],to=GrLivingArealims[2])
+```
+
+#29)Corra un natural spline para predecir SalesPrice a partir de GrLiving area con los datos de casas3 y grafique los resultados siguiendo el ejemplo visto en clase. Especifique 10 grados de libertad
+
+Note que el chunk anterior le ayudar? a generar los inputs que necesita (3)
+
+
+```{r}
+fitNS=lm(SalePrice~ns(GrLivArea ,df=10),data=casas3)
+predNS=predict (fitNS ,newdata=list(GrLivArea=GrLivingArea.grid),se=T)
+plot(casas3$GrLivArea ,casas3$SalePrice ,col="gray")
+lines(GrLivingArea.grid , predNS$fit ,col="red",lwd=2)
+```
+
+#30)Corra un smoothing spline para predecir SalesPrice a partir de GrLiving area con los datos de casas3 y grafique los resultados siguiendo el ejemplo visto en clase. Especifique 10 grados de libertad
+(3)
+
+```{r}
+fit4=smooth.spline(casas3$GrLivArea ,casas3$SalePrice ,df=10)
+
+#Graficación
+plot(casas3$GrLivArea ,casas3$SalePrice ,xlim=GrLivingArealims ,cex =.5,col=" darkgrey ")
+title("Smoothing Spline ")
+lines(fit4 ,col="red",lwd =2)
+legend ("topright",legend=c("10 DF"),
+col=c("red","blue"),lty=1,lwd=2, cex =.8)
+```
+#31)Cu?ntos nudos tiene el natural spline y cu?ntos tiene el smoothing spline? (2) (No tiene que ser un n?mero exacto en los dos casos)
+
+Respuesta: El natural spline posee más nudos que el smoothing spline, conforme ingreso mayor nivel de penalización lambda, la cantidad de nudos se va reduciendo, el spline natural no posee esa penalización, por lo que se espera mayores nudos.
+
+#32)De qu? manera dir?a que contraresta el smoothing spline la flexibilidad del modelo? (1)
+
+Respuesta: se introduce una penalización por la curvatura de la función de regresión, de manera que castiga la variabilidad existente en los coeficientes de las funciones, de manera que no permitirá que para cada estimación el ajuste en los datos sea tan alto que la diferencia entre los coeficientes sea importantes. Los reducirá al máximo.
+
+#33)Replique la natural spline calculada en la pregunta 31, esta vez con validaci?n cruzada. Sugerencia: utilice como base el chunk de la pregunta 17, solo tendr? que cambiar algunas l?neas. Si va a volver a hacer las particiones (no es necesario), mantenga el set.seed(100) antes y k=100 (5)
+
+```{r}
+set.seed(100)
+Kparticiones <- kWayCrossValidation(nrow(casas3),10,NULL,NULL)
+casas3$pred_mod_lineal3_CV <-0
+
+for (i in 1:10){
+Particion <- Kparticiones[[i]]
+NSVC <- lm(SalePrice~ns(GrLivArea ,df=10), data=casas3[Particion$train, ], cv=TRUE)
+
+}
+NSVC
+#predNSVC=predict (NSVC ,newdata=list(GrLivArea=GrLivingArea.grid),se=T)
+#plot(casas3$GrLivArea ,casas3$SalePrice ,col="gray")
+#lines(GrLivingArea.grid , predNSVC$fit ,col="red",lwd=2)
+  
+
+```
+
+
+
+
+Puntos Extra: 
+
+#34)Genere una regresi?n gam a su conveniencia para predecir SalePrice en la base casas3 en donde incluya al menos un smoothing spline y un natural spline
+```{r}
+
+```
+
+Explique brevemente por qu? escogi? las variables y muestre los resultados con summary()
+
+Si hubiera tenido más tiempo hubiera corrido las siguientes variables:
+GrLivArea y amenidades extra no dependientes del espacio habitable (Fireplaces
+,PoolArea
+, LotArea), debido a que tengo interés y presunción de que aspectos que involucran más lujo sobre la casa que sobre la necesidad de cumplir la habitabilidad (cantidad de cuartos, etc) pueden predecir también parte del precio. Considerando un spline que corre pequeñas regresiones por nudo y pensando en la gran variabilidad de la distribución de las variables elegidas, parece pertinente ver cómo se comporta para ciertos rangos de áreas (pool area, lote area, sobretodo yo pongo atención a lote area) con un nivel de variabilidad grande, por lo que permito un gam que permite ajustes más generalizados de la función. con esto puedo ver, por ejemplo, si hay evidencia de casas de mucho precio y muy lujosas por las amenidades que tiene pero con lotes pequeños, es decir, que el área de lote no sea el que explique su precio. 

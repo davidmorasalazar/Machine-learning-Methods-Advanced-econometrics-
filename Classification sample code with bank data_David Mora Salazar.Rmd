@@ -1,0 +1,344 @@
+---
+title: "Examen Parcial 2_David Mora Salazar"
+author: "David Mora Salazar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r setup, include=FALSE}
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("corrplot")
+install.packages("tidyverse")
+install.packages("glmnet")
+install.packages("caret")
+install.packages("ggpubr")
+install.packages("pROC")
+
+library("dplyr")
+library("ggplot2")
+library("corrplot")
+library("tidyverse")
+library("glmnet")
+library("caret")
+library("ggpubr")
+library("pROC")
+```
+Elija uno de los data sets disponibles en https://www.kaggle.com/datasets?tags=13302-Classification. Utilice una variable de respuesta de dos niveles (si la variable no está en 2 niveles, lo puede manipular para que así sea. No es necesario mostrar esta parte del proceso en R).
+```{r}
+set.seed(1000)
+Datos <- read.csv2("~/ECONOMÍA UCR/ECONOMÍA UNIVERSIDAD DE COSTA RICA/Econometría Avanzada/Parcial 2/Bank dataset/Bank Customer Churn Prediction.csv",  sep = ',',dec = '.')
+
+
+Datos2 <- Datos %>% mutate(
+country = as.factor(country),
+credit_card = as.factor(credit_card),
+active_member = as.factor(active_member),
+gender = as.factor(gender))
+
+dummy <- dummyVars("~.",data=Datos2)
+Datos2 <- data.frame(predict(dummy, newdata = Datos2)) 
+
+
+Datos <- Datos2
+rm(Datos2)
+
+Datos_norm<- scale(Datos)
+
+Datos <-Datos %>%  mutate(Class=case_when(Class==0~"NO", TRUE~"SI"))
+
+Datos_norm <-as.data.frame(Datos_norm) %>%  mutate(Class=case_when(Class>0~"SI", TRUE~"NO"))
+```
+ 
+Desarrolle, para el data set elegido y siguiendo los scripts de ejemplo usados en clase, DOS de los tres siguientes modelos de clasificación. Trabaje con el paquete caret en R, utilizando method=”repeatedcv” en trainControl: (28 puntos)
+
+a. Regresión Logística
+
+(Si desea usar un kernel radial utilice
+hiperparámetros<-expand.grid(sigma = c(0.001, 0.01, 0.1, 0.5, 1),
+C = c(1 , 20, 50, 100, 200, 500, 700)) cambiando los valores de sigma y C por los que usted desee.
+
+Para cada uno de estos modelos deberá responder:
+
+1. ¿Cuál es la proporción de la variable respuesta en datos_train y datos_test?(Utilice una separación 0.75 train, 0.25 test al generar la partición con caret::createDataPartition)
+
+```{r}
+set.seed(1000)
+training.sample<-Datos_norm$Class %>% caret::createDataPartition(p=0.75, list=FALSE)
+datos_train<-Datos_norm[training.sample, ]
+datos_test<-Datos_norm[-training.sample, ]
+prop.table(table(datos_train$Class))
+prop.table(table(datos_test$Class))
+```
+La proporción de variables se divide en un 95.5%.
+
+2. ¿Cuál es el tamaño de cada uno de los sub sets mencionados en la pregunta anterior?
+
+
+3. ¿Cuál es la métrica utilizada para elegir el modelo final que usted especificó en control Train?
+
+```{r}
+set.seed(1000)
+particiones <- 10
+repeticiones <- 5
+hiperparametros <- data.frame(parameter = "none")
+set.seed(1000)
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+for (i in 1:(particiones * repeticiones)) {
+ seeds[[i]] <- sample.int(1000, nrow(hiperparametros))
+}
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(1000, 1)
+#Podemos usar solo cv, leave one out, etc
+control_train <- trainControl(method = "repeatedcv", number = particiones,repeats =repeticiones,seeds = seeds,
+#Final, all, o none
+returnResamp = "final", 
+#Si queremos el log 
+verboseIter = FALSE,
+allowParallel = TRUE, 
+#Lo necesitamos si vamos a usar ROC como métrica
+classProbs = TRUE)
+
+# AJUSTE DEL MODELO
+# ==================================================================
+set.seed(1000)
+modelo_logistic <- train(Class ~ ., data = datos_train,
+method = "glm",
+
+#Metric: métricas usadas para evaluar el modelo
+metric = "Accuracy",
+#Accuracy es la métrica por default para modelos de clasificación y RMSE para modelos de regresión
+
+trControl = control_train, family = "binomial")
+```
+La métrica a utilizar para este modelo de clasificación es de Accuracy.
+
+4. ¿Cuál es el valor del kappa y accuracy para cada una de las repeticiones de la primera partición (k=1 o Fold 1)?
+
+```{r}
+modelo_logistic 
+```
+
+```{r}
+modelo_logistic$resample
+```
+
+5. ¿Cuál es el accuracy y kappa del modelo final? (recuerde que esto no es lo mismo que el accuracy y kappa obtenidos al generar la matriz de confusión del siguiente paso)
+
+```{r}
+summary(modelo_logistic$finalModel)
+```
+
+6. Utilice las predicciones raw para calcular y mostrar los resultados de una matriz de confusión con caret:confusionMatrix, utilizando como referencia el set de datos test que separó al inicio del ejercicio. Siga los ejemplos vistos en clase. 
+
+Indique cuáles son las 2 métricas más importantes para su problema de clasificación y explique por qué, dentro del contexto de su problema de clasificación.
+
+#Predicciones
+
+```{r}
+#Evaluacion de resultados
+
+#Lo podemos cambiar entre raw y prob
+predicciones =predict(modelo_logistic, newdata = datos_test, type = "raw")
+
+predicciones_prob=predict(modelo_logistic, newdata = datos_test, type = "prob")
+predicciones_prob %>% head(10)
+```
+
+#Matrices de confusión
+```{r}
+caret::confusionMatrix(predicciones, as.factor(datos_test$Class),positive="SI")
+#Kappa serà especialmente ùtil cuando tengamos problemas de imbalances
+#Pos Pred Value= Asertividad positiva o precisión:VP/FP+VP
+#Neg Pred Value= Asertividad negativa: VN/FN+VN
+#Prevalence: Casos positivos/total
+#Detection rate: VP/Total
+#Detection prevalence: predichos positivos/Total
+#Balanced Acuracy: (sensibilidad+especificidad)/2
+```
+7. Utilice las predicciones tipo “prob” para generar una curva ROC y calcular el AUC.
+
+```{r}
+# Cálculo de la curva
+curva_roc <- roc(response = datos_test$Class, 
+ predictor = predicciones_prob$SI) 
+
+# Gráfico de la curva
+plot(curva_roc)
+auc(curva_roc)
+
+```
+Desarrolle, para el data set elegido y siguiendo los scripts de ejemplo usados en clase, DOS de los tres siguientes modelos de clasificación. Trabaje con el paquete caret en R, utilizando method=”repeatedcv” en trainControl: (28 puntos)
+
+a. K vecinos más cercanos
+
+(Si desea usar un kernel radial utilice
+hiperparámetros<-expand.grid(sigma = c(0.001, 0.01, 0.1, 0.5, 1),
+C = c(1 , 20, 50, 100, 200, 500, 700)) cambiando los valores de sigma y C por los que usted desee.
+
+Para cada uno de estos modelos deberá responder:
+
+1. ¿Cuál es la proporción de la variable respuesta en datos_train y datos_test?(Utilice una separación 0.75 train, 0.25 test al generar la partición con caret::createDataPartition)
+
+```{r}
+set.seed(1000)
+Datos <- read.csv2("~/ECONOMÍA UCR/ECONOMÍA UNIVERSIDAD DE COSTA RICA/Econometría Avanzada/Parcial 2/Bank dataset/Bank Customer Churn Prediction.csv",  sep = ',',dec = '.')
+
+
+Datos2 <- Datos %>% mutate(
+country = as.factor(country),
+credit_card = as.factor(credit_card),
+active_member = as.factor(active_member),
+gender = as.factor(gender))
+
+dummy <- dummyVars("~.",data=Datos2)
+Datos2 <- data.frame(predict(dummy, newdata = Datos2)) 
+
+
+Datos <- Datos2
+rm(Datos2)
+
+Datos_norm<- scale(Datos)
+
+Datos <-Datos %>%  mutate(Class=case_when(Class==0~"NO", TRUE~"SI"))
+
+Datos_norm <-as.data.frame(Datos_norm) %>%  mutate(Class=case_when(Class>0~"SI", TRUE~"NO"))
+
+```
+Se usan los datos normalizados:
+```{r}
+#Definicion de datos de prueba y entrenamiento (Ojo:Esta no es la validación cruzada)
+set.seed(100)
+training.sample<-Datos_norm$Class %>% caret::createDataPartition(p=0.75, list=FALSE)
+
+datos_train<-Datos_norm[training.sample, ]
+datos_test<-Datos_norm[-training.sample, ]
+
+#Verificar proporción de datos en cada muestra sea similar(Partition lo hace por defecto)
+prop.table(table(datos_train$Class))
+prop.table(table(datos_test$Class))
+```
+
+2. ¿Cuál es el tamaño de cada uno de los sub sets mencionados en la pregunta anterior?
+
+
+3. ¿Cuál es la métrica utilizada para elegir el modelo final que usted especificó en control Train?
+
+```{r}
+# HIPERPARÁMETROS, NÚMERO DE REPETICIONES Y SEMILLAS PARA CADA REPETICIÓN
+#======================================================================
+#K particiones: K folds. Lo usual es usar 5 o 10.
+
+particiones <- 10
+repeticiones <- 5
+# Hiperparámetros. A diferencia del modelo logístico, en este caso sí utilizamos hiperparámetros 
+hiperparametros <- data.frame(k = c(5,10,25, 50))
+#Cada repetición de partición se hace para 8 diferentes k
+set.seed(123)
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+#Explorar seeds: Vemos que hay una diferencia con las semillas que usamos en el modelo logístico: en este caso cada una de las 51 líneas se compone a su vez de 8  semillas, correspondientes a los diferentes parámetros (diferentes k)
+ seeds[[i]] <- sample.int(1000, nrow(hiperparametros)) 
+}
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(1000, 4)
+```
+
+```{r}
+# DEFINICIÓN DEL ENTRENAMIENTO
+#===============================================================================
+#Aqui estamos usando validación cruzada repetida y no solo validación cruzada
+
+control_train <- trainControl(
+#Podemos usar solo cv, leave one out, etc  
+method = "repeatedcv", 
+number = particiones,
+repeats = repeticiones, 
+seeds = seeds,
+#Final, all, o none
+returnResamp = "final", 
+#Si queremos el log 
+verboseIter = FALSE,
+allowParallel = TRUE, 
+#Lo necesitamos si vamos a usar ROC como métrica
+classProbs = TRUE)
+```
+
+```{r}
+# AJUSTE DEL MODELO
+# ==================================================================
+set.seed(342)
+modelo_knn <- train(Class ~ ., data = datos_train,
+method = "knn",
+tuneGrid = hiperparametros,
+#Metric: métricas usadas para evaluar el modelo
+metric = "Accuracy",
+#Accuracy es la métrica por default para modelos de clasificación y RMSE para modelos de regresión
+
+trControl = control_train)
+
+modelo_knn
+
+resamples <- modelo_knn$resample %>% mutate(Rep=substr(Resample,8,11)) 
+resamples
+```
+
+```{r}
+modelo_knn$finalModel
+summary(modelo_knn$finalModel)
+```
+
+6. Utilice las predicciones raw para calcular y mostrar los resultados de una matriz de confusión con caret:confusionMatrix, utilizando como referencia el set de datos test que separó al inicio del ejercicio. Siga los ejemplos vistos en clase. 
+
+Indique cuáles son las 2 métricas más importantes para su problema de clasificación y explique por qué, dentro del contexto de su problema de clasificación.
+
+#Predicciones
+
+```{r}
+#Evaluacion de resultados
+
+#Lo podemos cambiar entre raw y prob
+predicciones =predict(modelo_knn, newdata = datos_test, type = "raw")
+predicciones%>% head(10)
+predicciones_prob=predict(modelo_knn, newdata = datos_test, type = "prob")
+predicciones_prob %>% head(10)
+```
+#Matrices de confusión
+```{r}
+caret::confusionMatrix(predicciones, as.factor(datos_test$Class),positive="SI")
+#Kappa serà especialmente ùtil cuando tengamos problemas de imbalances
+#Pos Pred Value= Asertividad positiva o precisión:VP/FP+VP
+#Neg Pred Value= Asertividad negativa: VN/FN+VN
+#Prevalence: Casos positivos/total
+#Detection rate: VP/Total
+#Detection prevalence: predichos positivos/Total
+#Balanced Acuracy: (sensibilidad+especificidad)/2
+
+#Podemos comparar estas métricas con las obtenidas en el resampling
+
+# Cuando los datos no están balanceados, es más probable que asignemos una clasificación equivocada a la clase menos frecuente, comparada con la clase más frecuente. 
+
+#Fórmula del accuracy: 
+
+#(VP+VN)/(VP+VN+FP+FN)
+
+#Asumiendo que la clase con menor frecuencia es la negativa, con datos desbalanceados, si VN es muy pequeño respecto al total de negativos reales, esto va a afectar poco el accuracy si logramos predecir correctamente una buena parte de los positivos (VP). El numerador no se verá afectado por la desproporción entre la detección de positivos y negativos, y el accuracy podría ser alto. Esto es especialmente importante si nos interesa mucho obtener una buena predicción de los negativos. 
+
+#En modelos desbalanceados, el kappa evita que creamos que un modelo es bueno cuando realmente solo supera por poco lo esperado por azar
+
+# Kappa = (Accuracy – Accuracy Esperado (si hubiera sido clasificado al azar)) / (1 – Accuracy Esperado (si hubiera sido clasificado al azar)) 
+
+#Es decir: valor de accuracy normalizado respecto del porcentaje de acierto esperado por azar. 
+
+```
+#ROC-AUC curve
+
+```{r}
+# Cálculo de la curva. 
+#Aquí tiene más sentido el uso de la curva ya que podemos mover el punto de corte de probabilidades
+curva_roc <- roc(response = datos_test$Class, 
+ predictor = predicciones_prob$SI) 
+
+# Gráfico de la curva
+plot(curva_roc)
+auc(curva_roc)
+
+```
